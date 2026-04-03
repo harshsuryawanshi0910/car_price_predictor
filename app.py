@@ -216,7 +216,7 @@ FUEL_TYPES = categories[2].tolist()
 # ======================== HELPER FUNCTIONS ========================
 def predict_price(car_name, company, year, kms_driven, fuel_type):
     if car_to_company.get(car_name) != company:
-        raise ValueError(f"❌ '{car_name}' does not belong to {company}. Please correct the selection.")
+        raise ValueError(f" '{car_name}' does not belong to {company}. Please correct the selection.")
     input_df = pd.DataFrame({
         "name": [car_name],
         "company": [company],
@@ -239,7 +239,7 @@ st.markdown("""
 
 # ======================== SIDEBAR ========================
 with st.sidebar:
-    st.markdown("## 🧠 Model Intelligence")
+    st.markdown("##  Model Intelligence")
     st.markdown("""
     <div style="background: #2a3f6ecc; border-radius: 20px; padding: 1rem;">
         <b>Algorithm:</b> Linear Regression<br>
@@ -250,7 +250,7 @@ with st.sidebar:
     </div>
     """.format(date=datetime.now().strftime("%Y-%m-%d")), unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("### 📌 Pro Tips")
+    st.markdown("###  Pro Tips")
     st.info(
         "✅ Select company first → car models update automatically.\n\n"
         "✅ Use the **Compare** tab to evaluate two cars side‑by‑side.\n\n"
@@ -258,7 +258,7 @@ with st.sidebar:
     )
 
 # ======================== TABS ========================
-tab1, tab2 = st.tabs(["🔮 Single Prediction", "🔄 Compare Cars"])
+tab1, tab2 = st.tabs([" Single Prediction", " Compare Cars"])
 
 # ------------------------ TAB 1: Single Prediction ------------------------
 with tab1:
@@ -267,22 +267,22 @@ with tab1:
     with colA:
         with st.container():
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            company = st.selectbox("🏭 **Company**", COMPANIES, index=0, key="single_company")
+            company = st.selectbox(" **Company**", COMPANIES, index=0, key="single_company")
             available_cars = CARS_BY_COMPANY.get(company, [])
             if not available_cars:
                 st.error(f"No car models for {company}")
                 car_name = ""
             else:
-                car_name = st.selectbox("🚘 **Car Model**", available_cars, key="single_car")
+                car_name = st.selectbox(" **Car Model**", available_cars, key="single_car")
             
             col_year_kms = st.columns(2)
             with col_year_kms[0]:
-                year = st.number_input("📅 **Year**", min_value=1990, max_value=datetime.now().year, step=1, value=2018)
+                year = st.number_input(" **Year**", min_value=1990, max_value=datetime.now().year, step=1, value=2018)
             with col_year_kms[1]:
-                kms_driven = st.number_input("🛣️ **Kilometers**", min_value=0, step=500, value=30000, format="%d")
+                kms_driven = st.number_input(" **Kilometers**", min_value=0, step=500, value=30000, format="%d")
             
-            fuel_type = st.selectbox("⛽ **Fuel Type**", FUEL_TYPES, index=0)
-            predict_btn = st.button("💰 **Predict Price**", use_container_width=True, type="primary")
+            fuel_type = st.selectbox(" **Fuel Type**", FUEL_TYPES, index=0)
+            predict_btn = st.button(" **Predict Price**", use_container_width=True, type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
         
         if predict_btn:
@@ -300,13 +300,13 @@ with tab1:
                             "kms": kms_driven,
                             "fuel": fuel_type
                         }
-                        st.success("✅ Prediction ready!")
+                        st.success(" Prediction ready!")
                     except ValueError as e:
                         st.error(str(e))
     
     with colB:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 💰 Estimated Price")
+        st.markdown("###  Estimated Price")
         if "last_price" in st.session_state:
             st.markdown(f"""
             <div class="pred-card">
@@ -320,13 +320,13 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("👈 Fill in car details and click **Predict Price**.")
+            st.info("Fill in car details and click **Predict Price**.")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Charts
     if "last_price" in st.session_state:
         st.markdown("---")
-        st.markdown("### 📊 **Price Trends**")
+        st.markdown("###  **Price Trends**")
         base_car = st.session_state["last_input"]["car"]
         base_company = st.session_state["last_input"]["company"]
         base_fuel = st.session_state["last_input"]["fuel"]
@@ -351,7 +351,7 @@ with tab1:
         
         col1, col2 = st.columns(2)
         if not df_year.empty:
-            fig1 = px.line(df_year, x="Year", y="Price", title=f"📈 {base_car} – Price vs Year (50k km)",
+            fig1 = px.line(df_year, x="Year", y="Price", title=f" {base_car} – Price vs Year (50k km)",
                            markers=True, template="plotly_white", color_discrete_sequence=["#4f46e5"])
             fig1.update_layout(yaxis_title="Price (₹)", hovermode="x unified", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig1, use_container_width=True, key="year_chart")
@@ -359,7 +359,7 @@ with tab1:
             col1.info("Cannot generate year chart.")
         
         if not df_kms.empty:
-            fig2 = px.line(df_kms, x="Kilometers", y="Price", title=f"📉 {base_car} – Price vs Kilometers (2016 model)",
+            fig2 = px.line(df_kms, x="Kilometers", y="Price", title=f" {base_car} – Price vs Kilometers (2016 model)",
                            markers=True, template="plotly_white", color_discrete_sequence=["#7c3aed"])
             fig2.update_layout(yaxis_title="Price (₹)", hovermode="x unified", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True, key="kms_chart")
@@ -368,14 +368,14 @@ with tab1:
 
 # ------------------------ TAB 2: Compare Cars (same styling as Single Prediction) ------------------------
 with tab2:
-    st.markdown("### 🔄 **Compare Two Cars**")
+    st.markdown("###  **Compare Two Cars**")
     st.caption("Select two vehicles – we'll show the price difference instantly.")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🚘 Car A")
+        st.markdown("####  Car A")
         company_a = st.selectbox("Company A", COMPANIES, key="comp_a", index=0)
         cars_a = CARS_BY_COMPANY.get(company_a, [])
         car_a_name = st.selectbox("Model A", cars_a, key="car_a") if cars_a else ""
@@ -388,7 +388,7 @@ with tab2:
     
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🚙 Car B")
+        st.markdown("####  Car B")
         company_b = st.selectbox("Company B", COMPANIES, key="comp_b", index=1 if len(COMPANIES)>1 else 0)
         cars_b = CARS_BY_COMPANY.get(company_b, [])
         car_b_name = st.selectbox("Model B", cars_b, key="car_b") if cars_b else ""
@@ -399,7 +399,7 @@ with tab2:
         fuel_b = st.selectbox("Fuel B", FUEL_TYPES, key="fuel_b", index=0)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    if st.button("🔍 Compare Now", type="primary", use_container_width=True):
+    if st.button(" Compare Now", type="primary", use_container_width=True):
         if not car_a_name or not car_b_name:
             st.error("Please select valid car models for both sides.")
         else:
