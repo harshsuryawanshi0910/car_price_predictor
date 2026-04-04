@@ -5,7 +5,7 @@ import pickle
 import plotly.express as px
 from datetime import datetime
 
-# ======================== PAGE CONFIG ========================
+#                     PAGE CONFIG 
 st.set_page_config(
     page_title="Car Price Predictor | AutoValuer Pro",
     page_icon="🚗",
@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ======================== CUSTOM CSS (Dark Purple Theme) ========================
+#                      CUSTOM CSS (Dark Purple Theme) 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -188,7 +188,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ======================== LOAD MODEL AND MAPPING ========================
+#                  LOAD MODEL AND MAPPING 
 @st.cache_resource(show_spinner="Loading prediction model...")
 def load_model():
     with open("LinearRegressionModel.pkl", "rb") as f:
@@ -213,7 +213,7 @@ ohe = col_trans.named_transformers_["onehotencoder"]
 categories = ohe.categories_
 FUEL_TYPES = categories[2].tolist()
 
-# ======================== HELPER FUNCTIONS ========================
+#                  HELPER FUNCTIONS 
 def predict_price(car_name, company, year, kms_driven, fuel_type):
     if car_to_company.get(car_name) != company:
         raise ValueError(f" '{car_name}' does not belong to {company}. Please correct the selection.")
@@ -229,7 +229,7 @@ def predict_price(car_name, company, year, kms_driven, fuel_type):
 def format_price(price):
     return f"₹ {price:,.2f}"
 
-# ======================== HERO SECTION ========================
+#                  HERO SECTION 
 st.markdown("""
 <div class="hero">
     <h1>🚗 AutoValuer Pro</h1>
@@ -237,7 +237,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ======================== SIDEBAR ========================
+#                  SIDEBAR 
 with st.sidebar:
     st.markdown("##  Model Intelligence")
     st.markdown("""
@@ -257,7 +257,7 @@ with st.sidebar:
         "✅ Hover over charts for detailed insights."
     )
 
-# ======================== TABS ========================
+#                            TABS 
 tab1, tab2 = st.tabs([" Single Prediction", " Compare Cars"])
 
 # ------------------------ TAB 1: Single Prediction ------------------------
