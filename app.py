@@ -1,207 +1,222 @@
 import streamlit as st
-
-# ---------------------------- PAGE CONFIG MUST BE FIRST ----------------------------
-st.set_page_config(page_title="Car Price Predictor | AutoValuer Pro", page_icon="🚗", layout="wide")
-
-# ---------------------------- REST OF IMPORTS ----------------------------
 import pandas as pd
 import numpy as np
 import pickle
 import plotly.express as px
 from datetime import datetime
-import sqlite3
-import io
-from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import Pipeline
 
-# ---------------------------- GENERATE DATA & TRAIN MODEL (on first run) ----------------------------
-@st.cache_resource(show_spinner="Training model for first use...")
-def get_model_and_data():
-    """Generate synthetic car data, train a Linear Regression model, and return model + mappings."""
-    
-    # 1. Create synthetic dataset (realistic for Indian used cars)
-    np.random.seed(42)
-    n_samples = 1000
-    
-    companies = ['Maruti', 'Hyundai', 'Honda', 'Tata', 'Mahindra', 'Toyota', 'Ford', 'Volkswagen']
-    models_by_company = {
-        'Maruti': ['Swift', 'Dzire', 'Baleno', 'Vitara Brezza', 'Ertiga', 'Alto', 'WagonR', 'Ciaz'],
-        'Hyundai': ['i10', 'i20', 'Verna', 'Creta', 'Elantra', 'Santro', 'Grand i10'],
-        'Honda': ['City', 'Amaze', 'Jazz', 'WR-V', 'CR-V', 'Civic'],
-        'Tata': ['Nexon', 'Harrier', 'Tiago', 'Tigor', 'Altroz', 'Safari'],
-        'Mahindra': ['Scorpio', 'XUV500', 'Thar', 'Bolero', 'Marazzo', 'KUV100'],
-        'Toyota': ['Innova Crysta', 'Fortuner', 'Camry', 'Yaris', 'Glanza'],
-        'Ford': ['EcoSport', 'Figo', 'Aspire', 'Endeavour', 'Freestyle'],
-        'Volkswagen': ['Polo', 'Vento', 'Ameo', 'Tiguan', 'Passat']
+#                     PAGE CONFIG 
+st.set_page_config(
+    page_title="Car Price Predictor | AutoValuer Pro",
+    page_icon="🚗",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+#                      CUSTOM CSS (Dark Purple Theme) 
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    * {
+        font-family: 'Inter', sans-serif;
     }
-    # Flatten for name generation
-    all_models = []
-    for comp, models in models_by_company.items():
-        for model in models:
-            all_models.append((comp, model))
-    
-    fuel_types = ['Petrol', 'Diesel', 'CNG']
-    
-    # Generate random data
-    data = []
-    for _ in range(n_samples):
-        company, model = all_models[np.random.randint(0, len(all_models))]
-        year = np.random.randint(2005, 2025)
-        kms_driven = np.random.randint(0, 200000)
-        fuel = np.random.choice(fuel_types, p=[0.7, 0.25, 0.05])
-        
-        # Base price logic: newer + less km + diesel = higher price
-        base_price = 300000
-        age_penalty = (2025 - year) * 15000
-        km_penalty = kms_driven * 0.5
-        fuel_bonus = 50000 if fuel == 'Diesel' else (0 if fuel == 'Petrol' else -20000)
-        brand_factor = len(company) * 5000  # arbitrary
-        model_factor = len(model) * 2000
-        
-        price = max(50000, base_price + brand_factor + model_factor - age_penalty - km_penalty + fuel_bonus)
-        price += np.random.randint(-20000, 20000)  # noise
-        
-        data.append([model, company, year, kms_driven, fuel, int(price)])
-    
-    df = pd.DataFrame(data, columns=['name', 'company', 'year', 'kms_driven', 'fuel_type', 'price'])
-    
-    # 2. Preprocess and train model
-    X = df[['name', 'company', 'year', 'kms_driven', 'fuel_type']]
-    y = df['price']
-    
-    categorical_features = ['name', 'company', 'fuel_type']
-    preprocessor = ColumnTransformer(
-        transformers=[('onehotencoder', OneHotEncoder(drop='first', handle_unknown='ignore'), categorical_features)],
-        remainder='passthrough'
-    )
-    
-    model = Pipeline(steps=[('columntransformer', preprocessor),
-                            ('regressor', LinearRegression())])
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model.fit(X_train, y_train)
-    
-    # 3. Build mappings for UI
-    car_to_company = dict(zip(df['name'], df['company']))
-    companies_sorted = sorted(df['company'].unique())
-    cars_by_company = {comp: sorted(df[df['company'] == comp]['name'].unique()) for comp in companies_sorted}
-    
-    # Extract fuel categories from onehotencoder
-    ohe = model.named_steps['columntransformer'].named_transformers_['onehotencoder']
-    fuel_cats = ohe.categories_[2].tolist()  # Index 2 corresponds to fuel_type
-    
-    return model, car_to_company, companies_sorted, cars_by_company, fuel_cats
 
-# Load everything (cached after first run)
-model, car_to_company, COMPANIES, CARS_BY_COMPANY, FUEL_TYPES = get_model_and_data()
+    /* Main app background – deep navy */
+    .stApp {
+        background: linear-gradient(135deg, #1a2a4f 0%, #0f1a2e 100%);
+    }
 
-# ---------------------------- DATABASE SETUP (SQLite) ----------------------------
-DB_NAME = "history.db"
+    /* Hero Section */
+    .hero {
+        background: linear-gradient(135deg, #2a3f6e 0%, #1a2a4f 100%);
+        padding: 2rem;
+        border-radius: 32px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: 0 20px 35px -10px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+    }
+    .hero p {
+        font-size: 1.2rem;
+        opacity: 0.95;
+    }
 
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS predictions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            car_name TEXT,
-            company TEXT,
-            year INTEGER,
-            kms_driven INTEGER,
-            fuel_type TEXT,
-            predicted_price REAL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS comparisons (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            car_a_name TEXT,
-            car_a_company TEXT,
-            car_a_year INTEGER,
-            car_a_kms INTEGER,
-            car_a_fuel TEXT,
-            car_b_name TEXT,
-            car_b_company TEXT,
-            car_b_year INTEGER,
-            car_b_kms INTEGER,
-            car_b_fuel TEXT,
-            price_a REAL,
-            price_b REAL,
-            price_diff REAL,
-            diff_percent REAL
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    /* Cards – light background, dark text */
+    .card {
+        background: rgba(248,250,252,0.95);
+        border-radius: 28px;
+        padding: 1.8rem;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #0f172a;
+    }
+    .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+    }
 
-def insert_prediction(car_name, company, year, kms_driven, fuel_type, price):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute('''
-        INSERT INTO predictions (timestamp, car_name, company, year, kms_driven, fuel_type, predicted_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (now, car_name, company, year, kms_driven, fuel_type, price))
-    conn.commit()
-    conn.close()
+    /* Prediction Card – vibrant gradient, white text */
+    .pred-card {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        border-radius: 32px;
+        padding: 1.8rem;
+        text-align: center;
+        color: white !important;
+        box-shadow: 0 20px 35px -10px rgba(79,70,229,0.5);
+    }
+    .pred-number {
+        font-size: 2.8rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0.5rem 0;
+        color: white !important;
+    }
+    .pred-card hr {
+        background: rgba(255,255,255,0.3);
+    }
+    .pred-card div {
+        color: white !important;
+    }
 
-def get_all_predictions():
-    conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("SELECT * FROM predictions ORDER BY timestamp DESC", conn)
-    conn.close()
-    return df
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a2a4f 0%, #0f1a2e 100%);
+        border-right: 1px solid #2a3f6e;
+    }
+    [data-testid="stSidebar"] * {
+        color: #f1f5f9 !important;
+    }
+    [data-testid="stSidebar"] .stAlert {
+        background-color: #2a3f6ecc;
+        border-left-color: #4f46e5;
+    }
 
-def delete_predictions(ids):
-    if not ids:
-        return
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.executemany("DELETE FROM predictions WHERE id = ?", [(i,) for i in ids])
-    conn.commit()
-    conn.close()
+    /* ===== DARK PURPLE INPUT FIELDS ===== */
+    .stTextInput>div>div>input, 
+    .stNumberInput>div>div>input, 
+    .stSelectbox>div>div>select {
+        background: #2d1b4e !important;
+        border: 1px solid #6b21a5 !important;
+        border-radius: 16px;
+        padding: 10px 14px;
+        font-size: 1rem;
+        color: #f1f5f9 !important;
+        font-weight: 500;
+    }
+    .stTextInput>div>div>input:focus, 
+    .stNumberInput>div>div>input:focus, 
+    .stSelectbox>div>div>select:focus {
+        border-color: #a855f7 !important;
+        box-shadow: 0 0 0 2px rgba(168,85,247,0.3);
+        outline: none;
+    }
+    /* Dropdown options (when opened) */
+    div[data-baseweb="select"] ul {
+        background-color: #2d1b4e !important;
+        color: #f1f5f9 !important;
+    }
+    div[data-baseweb="select"] li:hover {
+        background-color: #4c1d95 !important;
+    }
+    /* Labels for inputs */
+    .stSelectbox label, .stNumberInput label {
+        color: #cbd5e1 !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.25rem;
+    }
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+        color: white !important;
+        border: none;
+        border-radius: 40px;
+        padding: 0.7rem 1.8rem;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .stButton>button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        background: linear-gradient(90deg, #7c3aed 0%, #4f46e5 100%);
+    }
 
-def insert_comparison(data):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute('''
-        INSERT INTO comparisons (
-            timestamp, car_a_name, car_a_company, car_a_year, car_a_kms, car_a_fuel,
-            car_b_name, car_b_company, car_b_year, car_b_kms, car_b_fuel,
-            price_a, price_b, price_diff, diff_percent
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (now, data['car_a_name'], data['car_a_company'], data['car_a_year'], data['car_a_kms'], data['car_a_fuel'],
-          data['car_b_name'], data['car_b_company'], data['car_b_year'], data['car_b_kms'], data['car_b_fuel'],
-          data['price_a'], data['price_b'], data['price_diff'], data['diff_percent']))
-    conn.commit()
-    conn.close()
+    /* Tabs – consistent with single prediction style */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 1rem;
+        background: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(248,250,252,0.9);
+        border-radius: 40px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+        color: #1e293b;
+        border: none;
+        backdrop-filter: blur(4px);
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+        color: white !important;
+    }
 
-def get_all_comparisons():
-    conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("SELECT * FROM comparisons ORDER BY timestamp DESC", conn)
-    conn.close()
-    return df
+    /* Alert boxes */
+    .stAlert {
+        border-radius: 16px;
+        font-weight: 500;
+        background-color: #2d1b4ecc;
+        color: #f1f5f9;
+        border-left-color: #a855f7;
+    }
+    .footer {
+        text-align: center;
+        color: #cbd5e1;
+        font-size: 0.8rem;
+        margin-top: 2rem;
+        padding: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def delete_comparisons(ids):
-    if not ids:
-        return
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.executemany("DELETE FROM comparisons WHERE id = ?", [(i,) for i in ids])
-    conn.commit()
-    conn.close()
+#                  LOAD MODEL AND MAPPING 
+@st.cache_resource(show_spinner="Loading prediction model...")
+def load_model():
+    with open("LinearRegressionModel.pkl", "rb") as f:
+        model = pickle.load(f)
+    return model
 
-init_db()
+@st.cache_data(show_spinner="Loading car data...")
+def load_car_mapping():
+    df = pd.read_csv("Cleaned_Car_data.csv")
+    mapping = df[['name', 'company']].drop_duplicates(subset='name')
+    car_to_company = dict(zip(mapping['name'], mapping['company']))
+    companies = sorted(df['company'].unique())
+    cars_by_company = {comp: sorted(df[df['company'] == comp]['name'].unique()) for comp in companies}
+    return car_to_company, companies, cars_by_company
 
-# ---------------------------- PREDICTION FUNCTION ----------------------------
+model = load_model()
+car_to_company, COMPANIES, CARS_BY_COMPANY = load_car_mapping()
+
+# Extract fuel types
+col_trans = model.named_steps["columntransformer"]
+ohe = col_trans.named_transformers_["onehotencoder"]
+categories = ohe.categories_
+FUEL_TYPES = categories[2].tolist()
+
+#                  HELPER FUNCTIONS 
 def predict_price(car_name, company, year, kms_driven, fuel_type):
     if car_to_company.get(car_name) != company:
-        raise ValueError(f" '{car_name}' does not belong to {company}.")
+        raise ValueError(f" '{car_name}' does not belong to {company}. Please correct the selection.")
     input_df = pd.DataFrame({
         "name": [car_name],
         "company": [company],
@@ -214,23 +229,7 @@ def predict_price(car_name, company, year, kms_driven, fuel_type):
 def format_price(price):
     return f"₹ {price:,.2f}"
 
-# ---------------------------- CSS ----------------------------
-st.markdown("""
-<style>
-    /* Dark purple theme */
-    .stApp { background: linear-gradient(135deg, #1a2a4f 0%, #0f1a2e 100%); }
-    .hero { background: linear-gradient(135deg, #2a3f6e 0%, #1a2a4f 100%); padding: 2rem; border-radius: 32px; color: white; text-align: center; margin-bottom: 2rem; }
-    .hero h1 { font-size: 3rem; font-weight: 800; }
-    .card { background: rgba(248,250,252,0.95); border-radius: 28px; padding: 1.8rem; color: #0f172a; }
-    .pred-card { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 32px; padding: 1.8rem; text-align: center; color: white; }
-    .pred-number { font-size: 2.8rem; font-weight: 800; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1a2a4f 0%, #0f1a2e 100%); }
-    .stButton>button { background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%); color: white; border-radius: 40px; }
-    .footer { text-align: center; color: #cbd5e1; margin-top: 2rem; }
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------------------- HERO ----------------------------
+#                  HERO SECTION 
 st.markdown("""
 <div class="hero">
     <h1>🚗 AutoValuer Pro</h1>
@@ -238,181 +237,211 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------- SIDEBAR ----------------------------
+#                  SIDEBAR 
 with st.sidebar:
-    st.markdown("## Model Intelligence")
-    st.markdown(f"""
+    st.markdown("##  Model Intelligence")
+    st.markdown("""
     <div style="background: #2a3f6ecc; border-radius: 20px; padding: 1rem;">
-        <b>Algorithm:</b> Linear Regression (trained on synthetic data)<br>
+        <b>Algorithm:</b> Linear Regression<br>
         <b>Features:</b> Model, Company, Year, KM, Fuel<br>
-        <b>Samples:</b> 1000 generated<br>
-        <b>Last trained:</b> {datetime.now().strftime("%Y-%m-%d")}
+        <b>R² Score:</b> 0.90<br>
+        <b>Training samples:</b> 815<br>
+        <b>Last trained:</b> {date}
     </div>
-    """, unsafe_allow_html=True)
-    st.info("Single file – no external CSV or pickle needed.\n\nAll history stored locally in history.db.\n\nClick rows to select & delete.")
+    """.format(date=datetime.now().strftime("%Y-%m-%d")), unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("###  Pro Tips")
+    st.info(
+        "✅ Select company first → car models update automatically.\n\n"
+        "✅ Use the **Compare** tab to evaluate two cars side‑by‑side.\n\n"
+        "✅ Hover over charts for detailed insights."
+    )
 
-# ---------------------------- TABS ----------------------------
-tab1, tab2, tab3, tab4 = st.tabs(["Single Prediction", "Compare Cars", "Prediction History", "Comparison History"])
+#                            TABS 
+tab1, tab2 = st.tabs([" Single Prediction", " Compare Cars"])
 
-# ---------------------------- TAB 1: Single Prediction ----------------------------
+# ------------------------ TAB 1: Single Prediction ------------------------
 with tab1:
-    colA, colB = st.columns([2,1])
+    colA, colB = st.columns([2, 1], gap="large")
+    
     with colA:
         with st.container():
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            company = st.selectbox("Company", COMPANIES, key="comp_single")
-            cars = CARS_BY_COMPANY.get(company, [])
-            if not cars:
-                st.error(f"No models for {company}")
+            company = st.selectbox(" **Company**", COMPANIES, index=0, key="single_company")
+            available_cars = CARS_BY_COMPANY.get(company, [])
+            if not available_cars:
+                st.error(f"No car models for {company}")
                 car_name = ""
             else:
-                car_name = st.selectbox("Car Model", cars, key="car_single")
-            year = st.number_input("Year", 1990, datetime.now().year, 2018)
-            kms = st.number_input("Kilometers driven", 0, step=500, value=30000)
-            fuel = st.selectbox("Fuel Type", FUEL_TYPES)
-            if st.button("Predict & Save", type="primary", use_container_width=True):
-                if car_name:
-                    try:
-                        price = predict_price(car_name, company, year, kms, fuel)
-                        insert_prediction(car_name, company, year, kms, fuel, price)
-                        st.session_state["last_price"] = price
-                        st.session_state["last_input"] = {"car": car_name, "company": company, "year": year, "kms": kms, "fuel": fuel}
-                        st.success("Saved!")
-                    except ValueError as e:
-                        st.error(e)
+                car_name = st.selectbox(" **Car Model**", available_cars, key="single_car")
+            
+            col_year_kms = st.columns(2)
+            with col_year_kms[0]:
+                year = st.number_input(" **Year**", min_value=1990, max_value=datetime.now().year, step=1, value=2018)
+            with col_year_kms[1]:
+                kms_driven = st.number_input(" **Kilometers**", min_value=0, step=500, value=30000, format="%d")
+            
+            fuel_type = st.selectbox(" **Fuel Type**", FUEL_TYPES, index=0)
+            predict_btn = st.button(" **Predict Price**", use_container_width=True, type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
+        
+        if predict_btn:
+            if not available_cars or not car_name:
+                st.error("Please select a valid car model.")
+            else:
+                with st.spinner("Analyzing market data..."):
+                    try:
+                        price = predict_price(car_name, company, year, kms_driven, fuel_type)
+                        st.session_state["last_price"] = price
+                        st.session_state["last_input"] = {
+                            "car": car_name,
+                            "company": company,
+                            "year": year,
+                            "kms": kms_driven,
+                            "fuel": fuel_type
+                        }
+                        st.success(" Prediction ready!")
+                    except ValueError as e:
+                        st.error(str(e))
+    
     with colB:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### Estimated Price")
+        st.markdown("###  Estimated Price")
         if "last_price" in st.session_state:
             st.markdown(f"""
             <div class="pred-card">
+                <div style="font-size: 1rem; opacity: 0.9;">Market Value</div>
                 <div class="pred-number">{format_price(st.session_state['last_price'])}</div>
-                <div>{st.session_state['last_input']['year']} {st.session_state['last_input']['company']} {st.session_state['last_input']['car']}<br>{st.session_state['last_input']['kms']:,} km | {st.session_state['last_input']['fuel']}</div>
+                <hr style="background: rgba(255,255,255,0.3);">
+                <div style="font-size: 0.85rem;">
+                    {st.session_state['last_input']['year']} {st.session_state['last_input']['company']} {st.session_state['last_input']['car']}<br>
+                    {st.session_state['last_input']['kms']:,} km | {st.session_state['last_input']['fuel']}
+                </div>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("Predict a car to see the price.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------------------------- TAB 2: Compare Cars ----------------------------
-with tab2:
-    st.markdown("### Compare Two Cars")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        comp_a = st.selectbox("Company A", COMPANIES, key="comp_a")
-        cars_a = CARS_BY_COMPANY.get(comp_a, [])
-        car_a = st.selectbox("Model A", cars_a, key="car_a") if cars_a else ""
-        year_a = st.number_input("Year A", 1990, datetime.now().year, 2016, key="year_a")
-        kms_a = st.number_input("KM A", 0, step=500, value=40000, key="kms_a")
-        fuel_a = st.selectbox("Fuel A", FUEL_TYPES, key="fuel_a")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        comp_b = st.selectbox("Company B", COMPANIES, key="comp_b", index=1 if len(COMPANIES)>1 else 0)
-        cars_b = CARS_BY_COMPANY.get(comp_b, [])
-        car_b = st.selectbox("Model B", cars_b, key="car_b") if cars_b else ""
-        year_b = st.number_input("Year B", 1990, datetime.now().year, 2019, key="year_b")
-        kms_b = st.number_input("KM B", 0, step=500, value=20000, key="kms_b")
-        fuel_b = st.selectbox("Fuel B", FUEL_TYPES, key="fuel_b")
+            st.info("Fill in car details and click **Predict Price**.")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    if st.button("Compare & Save", type="primary", use_container_width=True):
-        if car_a and car_b:
+    # Charts
+    if "last_price" in st.session_state:
+        st.markdown("---")
+        st.markdown("###  **Price Trends**")
+        base_car = st.session_state["last_input"]["car"]
+        base_company = st.session_state["last_input"]["company"]
+        base_fuel = st.session_state["last_input"]["fuel"]
+        
+        years = list(range(2005, datetime.now().year + 1))
+        prices_year = []
+        for y in years:
             try:
-                price_a = predict_price(car_a, comp_a, year_a, kms_a, fuel_a)
-                price_b = predict_price(car_b, comp_b, year_b, kms_b, fuel_b)
-                diff = price_b - price_a
-                diff_percent = (diff / price_a) * 100 if price_a != 0 else 0
-                comp_data = {
-                    'car_a_name': car_a, 'car_a_company': comp_a, 'car_a_year': year_a, 'car_a_kms': kms_a, 'car_a_fuel': fuel_a,
-                    'car_b_name': car_b, 'car_b_company': comp_b, 'car_b_year': year_b, 'car_b_kms': kms_b, 'car_b_fuel': fuel_b,
-                    'price_a': price_a, 'price_b': price_b, 'price_diff': diff, 'diff_percent': diff_percent
-                }
-                insert_comparison(comp_data)
-                st.success("Comparison saved!")
-                colA, colB = st.columns(2)
-                colA.metric(car_a, format_price(price_a))
-                colB.metric(car_b, format_price(price_b), delta=format_price(diff) if diff>=0 else format_price(diff))
-            except Exception as e:
-                st.error(str(e))
+                prices_year.append(predict_price(base_car, base_company, y, 50000, base_fuel))
+            except:
+                prices_year.append(np.nan)
+        df_year = pd.DataFrame({"Year": years, "Price": prices_year}).dropna()
+        
+        kms_range = list(range(0, 150001, 10000))
+        prices_kms = []
+        for km in kms_range:
+            try:
+                prices_kms.append(predict_price(base_car, base_company, 2016, km, base_fuel))
+            except:
+                prices_kms.append(np.nan)
+        df_kms = pd.DataFrame({"Kilometers": kms_range, "Price": prices_kms}).dropna()
+        
+        col1, col2 = st.columns(2)
+        if not df_year.empty:
+            fig1 = px.line(df_year, x="Year", y="Price", title=f" {base_car} – Price vs Year (50k km)",
+                           markers=True, template="plotly_white", color_discrete_sequence=["#4f46e5"])
+            fig1.update_layout(yaxis_title="Price (₹)", hovermode="x unified", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig1, use_container_width=True, key="year_chart")
         else:
-            st.error("Select both car models.")
+            col1.info("Cannot generate year chart.")
+        
+        if not df_kms.empty:
+            fig2 = px.line(df_kms, x="Kilometers", y="Price", title=f" {base_car} – Price vs Kilometers (2016 model)",
+                           markers=True, template="plotly_white", color_discrete_sequence=["#7c3aed"])
+            fig2.update_layout(yaxis_title="Price (₹)", hovermode="x unified", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig2, use_container_width=True, key="kms_chart")
+        else:
+            col2.info("Cannot generate km chart.")
 
-# ---------------------------- HELPER TO GET SELECTED ROWS (CROSS-VERSION COMPATIBLE) ----------------------------
-def get_selected_indices(selection):
-    """Safely retrieve selected row indices from st.dataframe selection."""
-    if selection is None:
-        return []
-    # Try dictionary-style (most reliable across versions)
-    if isinstance(selection, dict):
-        return selection.get("rows", [])
-    # Try attribute .rows (property)
-    if hasattr(selection, "rows"):
-        rows_attr = selection.rows
-        # If it's a method, call it; otherwise use as is
-        if callable(rows_attr):
-            try:
-                return rows_attr()
-            except Exception:
-                return []
-        elif isinstance(rows_attr, list):
-            return rows_attr
-    # Fallback
-    return []
+# ------------------------ TAB 2: Compare Cars (same styling as Single Prediction) ------------------------
+with tab2:
+    st.markdown("###  **Compare Two Cars**")
+    st.caption("Select two vehicles – we'll show the price difference instantly.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("####  Car A")
+        company_a = st.selectbox("Company A", COMPANIES, key="comp_a", index=0)
+        cars_a = CARS_BY_COMPANY.get(company_a, [])
+        car_a_name = st.selectbox("Model A", cars_a, key="car_a") if cars_a else ""
+        if not cars_a:
+            st.warning(f"No models for {company_a}")
+        year_a = st.number_input("Year A", min_value=1990, max_value=datetime.now().year, value=2016, key="year_a")
+        kms_a = st.number_input("Kilometers A", min_value=0, step=500, value=40000, key="kms_a")
+        fuel_a = st.selectbox("Fuel A", FUEL_TYPES, key="fuel_a", index=0)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("####  Car B")
+        company_b = st.selectbox("Company B", COMPANIES, key="comp_b", index=1 if len(COMPANIES)>1 else 0)
+        cars_b = CARS_BY_COMPANY.get(company_b, [])
+        car_b_name = st.selectbox("Model B", cars_b, key="car_b") if cars_b else ""
+        if not cars_b:
+            st.warning(f"No models for {company_b}")
+        year_b = st.number_input("Year B", min_value=1990, max_value=datetime.now().year, value=2019, key="year_b")
+        kms_b = st.number_input("Kilometers B", min_value=0, step=500, value=20000, key="kms_b")
+        fuel_b = st.selectbox("Fuel B", FUEL_TYPES, key="fuel_b", index=0)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    if st.button(" Compare Now", type="primary", use_container_width=True):
+        if not car_a_name or not car_b_name:
+            st.error("Please select valid car models for both sides.")
+        else:
+            with st.spinner("Calculating..."):
+                try:
+                    price_a = predict_price(car_a_name, company_a, year_a, kms_a, fuel_a)
+                    price_b = predict_price(car_b_name, company_b, year_b, kms_b, fuel_b)
+                except ValueError as e:
+                    st.error(str(e))
+                    st.stop()
+            
+            # Same card style as single prediction result cards
+            comp_col1, comp_col2 = st.columns(2)
+            with comp_col1:
+                st.markdown(f"""
+                <div style="background: rgba(248,250,252,0.95); border-radius: 28px; padding: 1.5rem; text-align:center; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                    <h3 style="color:#0f172a;">{car_a_name}</h3>
+                    <p style="color:#334155;">{company_a} | {year_a} | {kms_a:,} km | {fuel_a}</p>
+                    <h2 style="color:#1e3c72;">{format_price(price_a)}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            with comp_col2:
+                st.markdown(f"""
+                <div style="background: rgba(248,250,252,0.95); border-radius: 28px; padding: 1.5rem; text-align:center; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                    <h3 style="color:#0f172a;">{car_b_name}</h3>
+                    <p style="color:#334155;">{company_b} | {year_b} | {kms_b:,} km | {fuel_b}</p>
+                    <h2 style="color:#2a5298;">{format_price(price_b)}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            diff = price_b - price_a
+            diff_percent = (diff / price_a) * 100
+            if diff > 0:
+                st.success(f" **Car B is {format_price(abs(diff))} ({diff_percent:.1f}%) more expensive than Car A.**")
+            elif diff < 0:
+                st.error(f" **Car B is {format_price(abs(diff))} ({abs(diff_percent):.1f}%) cheaper than Car A.**")
+            else:
+                st.info("Both cars have the same estimated price.")
 
-# ---------------------------- TAB 3: Prediction History ----------------------------
-with tab3:
-    st.markdown("### Single Prediction History")
-    df_pred = get_all_predictions()
-    if df_pred.empty:
-        st.info("No predictions yet.")
-    else:
-        display = df_pred.drop(columns=['id'])
-        selection = st.dataframe(display,
-                                 column_config={"predicted_price": st.column_config.NumberColumn("Price", format="₹ %.2f")},
-                                 hide_index=True,
-                                 use_container_width=True,
-                                 selection_mode="multi-row")
-        selected_indices = get_selected_indices(selection)
-        selected_ids = df_pred.iloc[list(selected_indices)]['id'].tolist() if selected_indices else []
-        col_del, col_csv = st.columns(2)
-        with col_del:
-            if st.button("Delete Selected", use_container_width=True) and selected_ids:
-                delete_predictions(selected_ids)
-                st.rerun()
-        with col_csv:
-            csv = io.StringIO()
-            df_pred.drop(columns=['id']).to_csv(csv, index=False)
-            st.download_button("Download CSV", csv.getvalue(), file_name="predictions.csv", mime="text/csv", use_container_width=True)
-        st.caption(f"Selected: {len(selected_ids)} rows")
-
-# ---------------------------- TAB 4: Comparison History ----------------------------
-with tab4:
-    st.markdown("### Comparison History")
-    df_comp = get_all_comparisons()
-    if df_comp.empty:
-        st.info("No comparisons yet.")
-    else:
-        display = df_comp.drop(columns=['id'])
-        selection = st.dataframe(display,
-                                 column_config={"price_a": "Price A (₹)", "price_b": "Price B (₹)", "price_diff": "Diff (₹)", "diff_percent": "Diff %"},
-                                 hide_index=True,
-                                 use_container_width=True,
-                                 selection_mode="multi-row")
-        selected_indices = get_selected_indices(selection)
-        selected_ids = df_comp.iloc[list(selected_indices)]['id'].tolist() if selected_indices else []
-        col_del, col_csv = st.columns(2)
-        with col_del:
-            if st.button("Delete Selected Comparisons", use_container_width=True) and selected_ids:
-                delete_comparisons(selected_ids)
-                st.rerun()
-        with col_csv:
-            csv = io.StringIO()
-            df_comp.drop(columns=['id']).to_csv(csv, index=False)
-            st.download_button("Download CSV", csv.getvalue(), file_name="comparisons.csv", mime="text/csv", use_container_width=True)
-        st.caption(f"Selected: {len(selected_ids)} rows")
-
-# ---------------------------- FOOTER ----------------------------
-st.markdown('<div class="footer">🚗 AutoValuer Pro – Fully self-contained | Data generated on the fly | History stored in SQLite</div>', unsafe_allow_html=True)
+# ======================== FOOTER ========================
+st.markdown("""
+<div class="footer">
+    🚗 AutoValuer Pro – Powered by Streamlit & Scikit-learn | Data source: Quikr Car Dataset
+</div>
+""", unsafe_allow_html=True)
